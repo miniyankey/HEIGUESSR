@@ -1,44 +1,46 @@
-# client
+# HEIGUESSR : Client
 
-This template should help get you started developing with Vue 3 in Vite.
+Application web développée avec [Vue.js](https://vuejs.org/) et [Vite](https://vite.dev/).
 
-## Recommended IDE Setup
+## Prérequis
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- Node.js 22.9 ou supérieur
+- L'API du projet lancée (voir [`../api/README.md`](../api/README.md))
 
-## Recommended Browser Setup
+## Installation
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+Depuis la racine du dépôt :
 
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
+cd client
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+## Scripts
 
-```sh
+| Commande              | Description                                                                   |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `npm run dev`         | Lance le serveur de développement Vite (rechargement à chaud)                 |
+| `npm run build`       | Génère la version de production dans le dossier `dist/`                       |
+| `npm run preview`     | Prévisualise localement le build de production                                |
+| `npm run lint`        | Exécute tous les linters (`oxlint` puis `eslint`) avec correction automatique |
+| `npm run lint:oxlint` | Exécute uniquement Oxlint (avec correction automatique)                       |
+| `npm run lint:eslint` | Exécute uniquement ESLint (avec correction automatique et cache)              |
+| `npm run format`      | Formate le code de `src/` avec Prettier                                       |
+
+## Développement
+
+```bash
 npm run dev
 ```
 
-### Compile and Minify for Production
+L'URL locale s'affiche dans le terminal (par défaut `http://localhost:5173`).
 
-```sh
-npm run build
-```
+## Qualité du code
 
-### Lint with [ESLint](https://eslint.org/)
+Avant chaque commit, il est recommandé de lancer :
 
-```sh
+```bash
 npm run lint
+npm run format
 ```
