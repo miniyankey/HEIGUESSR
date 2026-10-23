@@ -1,21 +1,23 @@
-import express from 'express';
-import createError from 'http-errors';
-import logger from 'morgan';
+import express from "express";
+import createError from "http-errors";
+import logger from "morgan";
 
-import indexRouter from './routes/index.js';
-import usersRouter from './routes/users.js';
-import mongoose from 'mongoose';
-import { databaseUrl } from './config.js';
+import indexRouter from "./routes/index.js";
+import usersRouter from "./routes/users.js";
+import authRouter from "./routes/auth.js";
+import mongoose from "mongoose";
+import { databaseUrl } from "./config.js";
 
 mongoose.connect(databaseUrl);
 
 const app = express();
 
-app.use(logger('dev'));
+app.use(logger("dev"));
 app.use(express.json());
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
+app.use("/", indexRouter);
+app.use("/users", usersRouter);
+app.use("/auth", authRouter);
 
 // Catch 404 and forward to the error handler
 app.use(function (req, res, next) {

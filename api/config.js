@@ -22,3 +22,8 @@ if (process.env.PORT) {
     );
   }
 }
+
+export const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+  throw new Error("Environment variable $JWT_SECRET must be set");
+}
