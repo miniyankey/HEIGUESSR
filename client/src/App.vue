@@ -1,16 +1,25 @@
-<script setup></script>
+<script setup>
+import { ref, computed } from 'vue'
+import LoginView from './views/LoginView.vue'
+import RegisterView from './views/RegisterView.vue'
+import PlanView from './views/PlanView.vue'
+
+const pages = { login: LoginView, register: RegisterView, plan: PlanView }
+const current = ref('login')
+const currentComponent = computed(() => pages[current.value])
+</script>
 
 <template>
   <header>
     <h1>HEIGUESSR</h1>
     <nav>
-      <RouterLink to="/login">Connexion</RouterLink>
-      <RouterLink to="/register">Inscription</RouterLink>
-      <RouterLink to="/plan">Plan</RouterLink>
+      <button type="button" @click="current = 'login'">Connexion</button>
+      <button type="button" @click="current = 'register'">Inscription</button>
+      <button type="button" @click="current = 'plan'">Plan</button>
     </nav>
   </header>
   <main>
-    <RouterView />
+    <component :is="currentComponent" @navigate="current = $event" />
   </main>
 </template>
 

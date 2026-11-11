@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from 'vue'
 
+const emit = defineEmits(['navigate'])
+
 const username = ref('')
 const password = ref('')
 
@@ -22,7 +24,10 @@ function onSubmit() {
     </label>
     <button type="submit">Se connecter</button>
   </form>
-  <p>Pas de compte ? <RouterLink to="/register">S'inscrire</RouterLink></p>
+  <p>
+    Pas de compte ?
+    <button type="button" class="link" @click="emit('navigate', 'register')">S'inscrire</button>
+  </p>
 </template>
 
 <style scoped>
@@ -36,5 +41,13 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 </style>
