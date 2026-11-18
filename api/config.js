@@ -27,3 +27,26 @@ export const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
   throw new Error("Environment variable $JWT_SECRET must be set");
 }
+
+export const cloudinaryConfig = {
+  cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+  apiKey: process.env.CLOUDINARY_API_KEY,
+  apiSecret: process.env.CLOUDINARY_API_SECRET,
+};
+for (const name of [
+  "CLOUDINARY_CLOUD_NAME",
+  "CLOUDINARY_API_KEY",
+  "CLOUDINARY_API_SECRET",
+]) {
+  if (!process.env[name]) {
+    throw new Error(`Environment variable ${name} must be set`);
+  }
+}
+
+// Comma-separated list of origins allowed to call the API from a browser.
+export const corsOrigins = (
+  process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
