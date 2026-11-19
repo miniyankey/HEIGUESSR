@@ -21,6 +21,8 @@ ne committe jamais toi-même, donne les commits par message.
 - **Vue 3** (`<script setup>`, Composition API), **Vite**, alias `@` → `src/`.
 - **vue-router** (routes), **Pinia** (état session + partie), `fetch` natif (pas d'axios).
 - Temps réel : **wsmini** côté navigateur (`import { WSClient } from 'wsmini'`).
+- **Pas de tests automatisés côté client** : la couverture de 75 % ne concerne que l'API.
+  Vérification par `npm run lint`, `npm run build` et un test manuel.
 - Qualité : `npm run lint` (oxlint + eslint), `npm run format` (Prettier).
   Style : **sans point-virgule, guillemets simples, 100 colonnes, 2 espaces, LF**.
 
