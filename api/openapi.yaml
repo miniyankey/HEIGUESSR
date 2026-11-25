@@ -10,6 +10,9 @@ info:
     - Request and response bodies are JSON (`Content-Type: application/json`).
     - Protected routes require an `Authorization: Bearer <token>` header with the JWT
       returned by `POST /auth/register` or `POST /auth/login` (valid 7 days).
+    - Users are `player` (default) or `admin`. Admins manage the game content (images,
+      floors, spots); admin-only routes return `403` to players. The role cannot be set
+      through the API.
     - Errors have a body `{ "message": "..." }`. Validation errors (422) add an
       `errors` object with one message per invalid field.
     - A malformed JSON body gives `400 Bad Request`.
@@ -24,9 +27,10 @@ servers:
 
 tags:
   - name: Authentication
+  - name: Users
   - name: Uploads
     description: |
-      Images are uploaded **directly from the client to Cloudinary**, never through the API:
+      **Admins only.** Images are uploaded **directly from the client to Cloudinary**, never through the API:
 
       1. `POST /uploads/signature` returns a one-file upload signature.
       2. The client sends a `multipart/form-data` POST to `uploadUrl` with `file`, `api_key`,
@@ -77,6 +81,34 @@ components:
           description: "JWT to send in the `Authorization: Bearer` header. Valid 7 days."
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6650f1c2a1b2c3d4e5f60001
+        username:
+          type: string
+          example: alice_42
+        email:
+          type: string
+          format: email
+          example: alice@heig-vd.ch
+        firstname:
+          type: string
+        lastname:
+          type: string
+        role:
+          type: string
+          enum: [player, admin]
+          description: Admins manage the game content.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
     Upload:
       type: object
       properties:
@@ -111,7 +143,7 @@ components:
 
   responses:
     Unauthorized:
-      description: Missing, invalid or expired bearer token.
+      description: Missing, invalid or expired bearer token, or the account no longer exists.
       headers:
         WWW-Authenticate:
           schema:
@@ -121,13 +153,23 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The authenticated user is not an admin.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: Only admins can perform this operation
 
 paths:
   /auth/register:
     post:
       tags: [Authentication]
       summary: Create an account
-      description: Creates a user and returns a token, so the user is logged in right away.
+      description: |
+        Creates a **player** and returns a token, so the user is logged in right away.
+        A `role` field in the body is ignored.
       requestBody:
         required: true
         content:
@@ -222,6 +264,23 @@ paths:
               example:
                 message: Name and password are required
 
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get the profile of the authenticated user
+      description: Includes the `role`, so the client knows whether to show admin screens.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /uploads/signature:
     post:
       tags: [Uploads]
@@ -229,7 +288,7 @@ paths:
       description: |
         The signature is bound to a `public_id` chosen by the server
         (`heiguessr/<userId>/<uuid>`), to the formats jpg, png and webp, and forbids
-        overwriting. It is valid for one hour. No request body.
+        overwriting. It is valid for one hour. No request body. Admins only.
       security:
         - bearerAuth: []
       responses:
@@ -267,6 +326,8 @@ paths:
                         enum: ["false"]
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /uploads:
     post:
@@ -275,7 +336,7 @@ paths:
       description: |
         Only `publicId` is read from the request: the URL, format, size and dimensions are
         fetched from Cloudinary. An image that is not jpg/png/webp or is larger than 10 MB
-        is deleted from Cloudinary and refused.
+        is deleted from Cloudinary and refused. Admins only.
       security:
         - bearerAuth: []
       requestBody:
@@ -300,6 +361,8 @@ paths:
                 $ref: "#/components/schemas/Upload"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           description: No image with this `publicId` on Cloudinary.
           content:

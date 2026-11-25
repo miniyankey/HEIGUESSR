@@ -15,9 +15,9 @@ Mettre à jour ce fichier quand un critère avance.
 | Liste paginée | ❌ | helper `paginate` prêt ; `GET /games`, `GET /spots`, `GET /leaderboard` |
 | Liste avec filtres optionnels | ❌ | `GET /spots?floor=&building=`, `GET /games?status=&code=` |
 | Agrégation MongoDB | ❌ | `GET /users/:id/stats`, `GET /leaderboard` (`$group` sur `Guess`) |
-| Authentification JWT sur opérations sensibles | 🟡 | middleware `authenticate` existe, à appliquer partout |
-| Autorisations cohérentes avec le domaine | ❌ | admin seul pour floors/spots/uploads ; host seul pour démarrer/supprimer une partie ; joueurs seuls pour voir/guess |
-| ≥ 1 opération limitant un utilisateur authentifié | ❌ | `PATCH /games/:id` réservé au host, `/spots` réservé aux admins |
+| Authentification JWT sur opérations sensibles | 🟡 | `authenticate` / `authenticateAdmin` ; à appliquer à chaque nouvelle route |
+| Autorisations cohérentes avec le domaine | 🟡 | rôle admin en place, `/uploads` réservé aux admins ; admin seul pour floors/spots/uploads ; host seul pour démarrer/supprimer une partie ; joueurs seuls pour voir/guess |
+| ≥ 1 opération limitant un utilisateur authentifié | ✅ | `/uploads` réservé aux admins (403 pour un joueur) ; aussi `PATCH /games/:id` réservé au host, `/spots` réservé aux admins |
 | Composante temps réel intégrée | ❌ | wsmini, événements publiés par les routes REST (cours DevMobile) |
 | Fonctionnalité mobile (bonus) | 🟡 | images (Cloudinary, upload direct) |
 
@@ -59,4 +59,3 @@ Mettre à jour ce fichier quand un critère avance.
 ## Dettes connues
 
 - `POST /uploads` : une erreur Cloudinary autre que 404 donne une 500 sans message utile.
-- `/uploads` accessible à tout utilisateur connecté : à restreindre aux admins (issue « Admin role »).

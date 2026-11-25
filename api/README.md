@@ -50,9 +50,24 @@ mongodb+srv://[USERNAME]:[PASSWORD]@[DOMAIN/IP]/[DB_NAME]
 | ------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `npm run dev` | Lance l'API en développement avec rechargement automatique (`--watch`) et chargement du fichier `.env` s'il existe |
 | `npm start`   | Lance l'API en mode production (`node bin/start.js`)                                                               |
+| `npm run set-role -- <username> <player|admin>` | Change le rôle d'un compte existant (voir « Comptes admin ») |
 | `npm test`    | Lance les tests automatisés avec la couverture de code (échoue sous 75 % de lignes couvertes)                      |
 
 > En production, les variables d'environnement doivent être fournies par la plateforme d'hébergement (le script `start` ne charge pas de fichier `.env`).
+
+## Comptes admin
+
+Les admins gèrent le contenu du jeu (images, plans d'étage, spots). Toute inscription crée un
+`player` et aucune route de l'API ne permet de devenir admin : le rôle se change en ligne de commande,
+sur la base indiquée par `MONGODB_URI`.
+
+```bash
+npm run set-role -- alice_42 admin    # promouvoir
+npm run set-role -- alice_42 player   # rétrograder
+```
+
+Le compte doit déjà exister (créé via `POST /auth/register`). Le rôle est relu en base à chaque
+requête : le changement prend effet immédiatement, sans nouveau login.
 
 ## Documentation
 
