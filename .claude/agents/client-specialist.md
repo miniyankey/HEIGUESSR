@@ -1,6 +1,6 @@
 ---
 name: client-specialist
-description: Implements HEIGUESSR web client features in client/ (Vue 3 + Vite, vue-router, Pinia, wsmini, Cloudinary direct upload), consuming the API as documented in api/openapi.yaml. Use for a screen, store or client-side feature scoped to one issue. Never commits.
+description: Implements HEIGUESSR web client features in client/ (Vue 3 + Vite, hash routing with useHashRoute, reactive stores, wsmini, Cloudinary direct upload), consuming the API as documented in api/openapi.yaml. Use for a screen, store or client-side feature scoped to one issue. Never commits.
 tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 

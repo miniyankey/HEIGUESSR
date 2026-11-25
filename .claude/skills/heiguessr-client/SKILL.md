@@ -1,6 +1,6 @@
 ---
 name: heiguessr-client
-description: Conventions, screens, API usage and real-time integration for the HEIGUESSR web client (Vue 3 + Vite, vue-router, Pinia, wsmini, Cloudinary direct upload). Use for any work in client/ - views, components, stores, API calls, game screen, admin screens, WebSocket.
+description: Conventions, screens, API usage and real-time integration for the HEIGUESSR web client (Vue 3 + Vite, hash routing with useHashRoute, reactive session store, wsmini, Cloudinary direct upload). Use for any work in client/ - views, components, stores, API calls, game screen, admin screens, WebSocket.
 ---
 
 # HEIGUESSR - Client
@@ -19,7 +19,9 @@ ne committe jamais toi-même, donne les commits par message.
 ## Stack et commandes
 
 - **Vue 3** (`<script setup>`, Composition API), **Vite**, alias `@` → `src/`.
-- **vue-router** (routes), **Pinia** (état session + partie), `fetch` natif (pas d'axios).
+- **Pas de vue-router ni de Pinia** : routage par hash avec `composable/useHashRoute.js` (code du
+  cours DevMobUI, à ne pas reformater) et état partagé avec `reactive` dans `store/`.
+  `fetch` natif (pas d'axios).
 - Temps réel : **wsmini** côté navigateur (`import { WSClient } from 'wsmini'`).
 - **Pas de tests automatisés côté client** : la couverture de 75 % ne concerne que l'API.
   Vérification par `npm run lint`, `npm run build` et un test manuel.
@@ -36,54 +38,71 @@ Variables Vite (`client/.env.local`, non commité) :
 `VITE_API_URL` (ex. `http://localhost:3000`) et `VITE_WS_URL` (ex. `ws://localhost:3000/ws`).
 Ne jamais coder d'URL en dur dans les composants.
 
-## Ce qui existe déjà
+## Organisation des dossiers
 
-- `main` : squelette Vite (`App.vue`, `main.js`), aucun écran.
-- Branche `10-add-client-base-screens` (pas encore mergée) : `router/index.js`, `LoginView`,
-  `RegisterView` (formulaires sans appel API, `TODO (issue #7)`), `PlanView` (affiche
-  `public/plan.webp`).
-  ⚠️ `vue-router` y a été installé dans le `package.json` **à la racine du dépôt** au lieu de
-  `client/package.json` : à réinstaller dans `client/` (et supprimer `package.json`,
-  `package-lock.json` et `node_modules` à la racine).
-- Branche 9 : `views/UploadTest.vue`, page de test de l'upload Cloudinary **à supprimer**. Elle sert
-  de référence pour le flux d'upload ci-dessous.
+| Dossier | Contenu | Exemple |
+| --- | --- | --- |
+| `composable/` | fonctions `useXxx()` qui utilisent l'API de composition (refs, `computed`, hooks `onMounted`…) et renvoient un objet lié au composant qui les appelle | `useHashRoute` |
+| `store/` | état **réactif partagé** par toutes les pages, créé une fois au niveau du module | `useSession.js` |
+| `utils/` | fonctions simples, **sans état réactif** | `navigation.js` |
+| `api/` | appels HTTP vers l'API | `http.js`, `resources.js` |
+| `components/` | composants réutilisables | `PlanPicker.vue` |
+| `views/` | un écran par page, rangé par partie de l'application : `auth/`, `game/` (parcours d'une partie), `profile/`, `admin/` ; `HomeView.vue` à la racine | `views/admin/AdminSpotsView.vue` |
 
-## Structure cible
+`store/useRoutes.js` (convention du cours) est une liste fixe de pages, pas un état partagé.
 
-```
-client/src/
-├── api/            # client HTTP : http.js (fetch + token + erreurs) puis un module par ressource
-├── realtime/       # connexion wsmini (une instance partagée)
-├── stores/         # Pinia : auth.js (token, user), game.js (partie en cours)
-├── router/         # routes + garde d'authentification / rôle admin
-├── components/     # PlanPicker, FloorSelector, SpotImage, PlayerList, Scoreboard…
-└── views/          # un écran par route
-```
+## Ce qui existe déjà (branche `10-add-client-base-screens`)
+
+- `store/useRoutes.js` : liste des pages `{ hash, label, component, access }`, la première est la
+  page par défaut. `access` : `guest` (déconnecté), `user` (connecté), `admin`.
+- `App.vue` : `useHashRoute(routes)`, charge le profil au démarrage si un token existe, puis
+  redirige selon `access` (sans token → `#login`, page admin sans rôle admin → `#home`).
+- `utils/navigation.js` : `goTo('#hash')` et `hashParam()` (un paramètre après `/`, ex.
+  `#lobby/<gameId>` : `useHashRoute` ne regarde que la partie avant le `/`). Les liens simples sont
+  des `<a href="#...">`.
+- `api/http.js` : `request(path, { method, body, query })` → `{ data, headers }`, préfixe
+  `VITE_API_URL` (défaut `http://localhost:3000`, voir `.env.example`), token, `ApiError` avec
+  `status`, `message`, `errors` (422). Sur 401 avec token : déconnexion. `readPagination(headers)`.
+- `api/resources.js` : une fonction par route (`login`, `getMe`, `listFloors`, `listSpots`…,
+  `uploadImage(file)` pour le flux Cloudinary complet) et `BUILDINGS` (même liste que l'API).
+- `store/useSession.js` : `session` (`token` dans `localStorage`, `user`), `isLoggedIn`, `isAdmin`,
+  `login`, `register`, `loadUser`, `logout`.
+- `components/` : `PlanPicker` (clic sur un plan → `{ x, y }` en %, marqueur), `ImageUpload`
+  (upload admin, émet le document `Upload`), `ComingSoon` (écran en attente d'une API).
+- Écrans **fonctionnels** : connexion, inscription, accueil, profil, admin, étages (CRUD + plan),
+  photos (spots : liste paginée et filtrée, CRUD, photo + placement sur le plan), écran de jeu
+  (choix de l'étage et clic sur le plan seulement).
+- Écrans **de base** (`ComingSoon`, en attente de l'API des parties, stats et utilisateurs) : liste
+  des parties, création, salle d'attente, résultat de manche, résultat final, historique,
+  utilisateurs. Leurs liens « (démo) » suivent le parcours prévu.
+- `views/UploadTest.vue` : page de test non suivie par Git, **à supprimer**.
 
 ## Écrans
 
-| Route | Vue | Accès |
-| --- | --- | --- |
-| `/login`, `/register` | LoginView, RegisterView | invité |
-| `/` | HomeView : créer une partie, rejoindre avec un code, mes parties | connecté |
-| `/games/:id` | LobbyView puis GameView selon `status` | joueur de la partie |
-| `/games/:id/results` | ResultsView : scores par round et classement | joueur |
-| `/profile`, `/users/:id` | stats (agrégation) | connecté |
-| `/leaderboard` | classement paginé | connecté |
-| `/admin/floors`, `/admin/spots` | CRUD plans et spots avec upload d'images | admin |
+| Hash | Vue | Accès | API |
+| --- | --- | --- | --- |
+| `#login`, `#register` | LoginView, RegisterView | invité | ✅ |
+| `#home` | HomeView : jouer, résumé personnel, admin | connecté | stats à venir |
+| `#games` | GamesView : mes parties (filtres, pagination), rejoindre par code | connecté | à venir |
+| `#new-game` | NewGameView : configuration | connecté | à venir |
+| `#lobby/<id>` | LobbyView : joueur·euses en direct | joueur | à venir (+ wsmini) |
+| `#play/<id>` | GameView : photo, étage, clic sur le plan | joueur | étages ✅, partie à venir |
+| `#round-result/<id>`, `#final-result/<id>` | résultats et classement | joueur | à venir |
+| `#profile`, `#history` | ProfileView, HistoryView (stats, parties) | connecté | profil ✅, stats à venir |
+| `#admin`, `#admin-floors`, `#admin-spots` | menu, étages, photos | admin | ✅ |
+| `#admin-users` | AdminUsersView : rôles, suppression | admin | à venir (rôle via `set-role` pour l'instant) |
 
-Garde de route : sans token → `/login`. Route admin et `user.role !== 'admin'` → `/`.
 L'API reste juge des droits : le client ne fait que masquer l'UI.
 
 ## Appels API
 
 - `api/http.js` centralise tout : préfixe `VITE_API_URL`, `Content-Type: application/json`,
-  `Authorization: Bearer <token>` depuis le store `auth`, parse JSON, lève une erreur portant
+  `Authorization: Bearer <token>` depuis `store/useSession.js`, parse JSON, lève une erreur portant
   `status`, `message` et `errors` (par champ, en 422).
-  Sur **401** : vider la session et rediriger vers `/login`.
+  Sur **401** : vider la session et rediriger vers `#login` (fait dans `api/http.js`).
 - Afficher les erreurs de validation `errors.<champ>` à côté du champ concerné.
 - Listes paginées : lire les en-têtes `Pagination-*` et passer `?page=&pageSize=`.
-- Le token (JWT, 7 jours) est stocké dans `localStorage` par le store `auth` et relu au démarrage.
+- Le token (JWT, 7 jours) est stocké dans `localStorage` par `store/useSession.js` et relu au démarrage.
 
 ## Plan et coordonnées
 
@@ -109,7 +128,7 @@ Formats acceptés : jpg, png, webp, 10 Mo max (`accept="image/jpeg,image/png,ima
 - Une connexion `WSClient(VITE_WS_URL)` partagée (`realtime/`), ouverte après le login avec
   `await ws.connect(token)`, fermée au logout.
 - S'abonner au canal de la partie en entrant dans le lobby, se désabonner en le quittant
-  (`onUnmounted`). Les messages ne font que **mettre à jour le store `game`**. Les composants
+  (`onUnmounted`). Les messages ne font que **mettre à jour un store `store/game.js`** (à créer, `reactive`). Les composants
   réagissent au store.
 - Les actions passent toujours par l'API REST (rejoindre, démarrer, guess). Le WebSocket est en
   lecture seule pour les clients. Après une reconnexion, recharger l'état avec `GET /games/:id`.
