@@ -8,7 +8,7 @@ import supertest from "supertest";
 import app from "../app.js";
 import { jwtSecret } from "../config.js";
 import Upload from "../models/upload.js";
-import { authHeader, createUser, useTestDatabase } from "./helpers.js";
+import { authHeader, createAdmin, createUser, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();
 
@@ -34,7 +34,7 @@ function cloudinaryResource(publicId, overrides = {}) {
 
 describe("POST /uploads/signature", () => {
   it("returns a valid signature for a public_id owned by the user", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
 
     const res = await supertest(app)
       .post("/uploads/signature")
@@ -51,6 +51,25 @@ describe("POST /uploads/signature", () => {
     assert.equal(signature, cloudinary.utils.api_sign_request(params, "test-api-secret"));
   });
 
+  it("returns 403 for a player", async () => {
+    const player = await createUser();
+
+    const res = await supertest(app)
+      .post("/uploads/signature")
+      .set(authHeader(player))
+      .expect(403);
+
+    assert.equal(res.body.message, "Only admins can perform this operation");
+  });
+
+  it("returns 401 for a token of a deleted user", async () => {
+    const admin = await createAdmin();
+    const header = authHeader(admin);
+    await admin.deleteOne();
+
+    await supertest(app).post("/uploads/signature").set(header).expect(401);
+  });
+
   it("returns 401 without a token", async () => {
     const res = await supertest(app).post("/uploads/signature").expect(401);
 
@@ -58,7 +77,7 @@ describe("POST /uploads/signature", () => {
   });
 
   it("returns 401 with an expired token", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
     const expired = jwt.sign({ sub: user.id, exp: 1 }, jwtSecret);
 
     await supertest(app)
@@ -70,7 +89,7 @@ describe("POST /uploads/signature", () => {
 
 describe("POST /uploads", () => {
   it("saves the image with the metadata given by Cloudinary", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
     const publicId = publicIdOf(user);
     const resource = mock.method(cloudinary.api, "resource", async () =>
       cloudinaryResource(publicId),
@@ -93,8 +112,8 @@ describe("POST /uploads", () => {
   });
 
   it("returns 422 for a publicId belonging to another user", async () => {
-    const user = await createUser();
-    const other = await createUser();
+    const user = await createAdmin();
+    const other = await createAdmin();
     const resource = mock.method(cloudinary.api, "resource", async () => ({}));
 
     await supertest(app)
@@ -107,7 +126,7 @@ describe("POST /uploads", () => {
   });
 
   it("returns 422 for a malformed publicId", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
 
     await supertest(app)
       .post("/uploads")
@@ -117,13 +136,13 @@ describe("POST /uploads", () => {
   });
 
   it("returns 422 when publicId is missing", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
 
     await supertest(app).post("/uploads").set(authHeader(user)).send({}).expect(422);
   });
 
   it("returns 422 and deletes the image when it is too large", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
     const publicId = publicIdOf(user);
     mock.method(cloudinary.api, "resource", async () =>
       cloudinaryResource(publicId, { bytes: 11 * 1024 * 1024 }),
@@ -142,7 +161,7 @@ describe("POST /uploads", () => {
   });
 
   it("returns 422 and deletes the image when its format is not allowed", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
     const publicId = publicIdOf(user);
     mock.method(cloudinary.api, "resource", async () =>
       cloudinaryResource(publicId, { format: "gif" }),
@@ -159,7 +178,7 @@ describe("POST /uploads", () => {
   });
 
   it("returns 404 when the image does not exist on Cloudinary", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
     mock.method(cloudinary.api, "resource", async () => {
       throw { error: { message: "Resource not found", http_code: 404 } };
     });
@@ -172,7 +191,7 @@ describe("POST /uploads", () => {
   });
 
   it("returns 409 when the image is already registered", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
     const publicId = publicIdOf(user);
     await Upload.create({
       publicId,
@@ -191,7 +210,7 @@ describe("POST /uploads", () => {
   });
 
   it("returns 500 when Cloudinary fails for another reason", async () => {
-    const user = await createUser();
+    const user = await createAdmin();
     mock.method(cloudinary.api, "resource", async () => {
       throw new Error("Cloudinary is down");
     });
@@ -203,6 +222,19 @@ describe("POST /uploads", () => {
       .set(authHeader(user))
       .send({ publicId: publicIdOf(user) })
       .expect(500);
+  });
+
+  it("returns 403 for a player, even with their own publicId", async () => {
+    const player = await createUser();
+    const resource = mock.method(cloudinary.api, "resource", async () => ({}));
+
+    await supertest(app)
+      .post("/uploads")
+      .set(authHeader(player))
+      .send({ publicId: publicIdOf(player) })
+      .expect(403);
+
+    assert.equal(resource.mock.callCount(), 0);
   });
 
   it("returns 401 without a token", async () => {

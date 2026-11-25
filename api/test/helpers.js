@@ -47,6 +47,11 @@ export async function createUser(properties = {}) {
   });
 }
 
+/** Creates an admin directly in the database. */
+export function createAdmin(properties = {}) {
+  return createUser({ role: "admin", ...properties });
+}
+
 /** Returns a valid JWT for the user, as POST /auth/login would. */
 export function tokenFor(user, options = { expiresIn: "1h" }) {
   return jwt.sign({ sub: user.id }, jwtSecret, options);
