@@ -40,6 +40,10 @@ tags:
     description: |
       Floor plans of the HEIG-VD buildings. Every logged-in user can read them (players
       click on the plan to guess); only admins create, change and delete them.
+  - name: Spots
+    description: |
+      **Admins only.** A spot is a photo taken in a building and the place on a floor plan
+      where it was taken: the answer of a round. Players never read spots directly.
 
 components:
   securitySchemes:
@@ -219,7 +223,133 @@ components:
           type: string
           format: date-time
 
+    Position:
+      type: object
+      required: [x, y]
+      description: |
+        Point on the floor plan, in percent of the plan image's width (`x`) and height (`y`),
+        from its top-left corner. Independent of the image resolution.
+      properties:
+        x:
+          type: number
+          minimum: 0
+          maximum: 100
+          example: 40
+        y:
+          type: number
+          minimum: 0
+          maximum: 100
+          example: 62.5
+
+    SpotFields:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: Leading/trailing spaces are removed.
+          example: Cafétéria
+        floor:
+          type: string
+          description: ID of an existing floor.
+          example: 6650f1c2a1b2c3d4e5f60a01
+        image:
+          type: string
+          description: ID of an existing upload, the photo shown to players.
+          example: 6650f1c2a1b2c3d4e5f60719
+        position:
+          allOf:
+            - $ref: "#/components/schemas/Position"
+          description: On update, replaces both coordinates (send `x` and `y`).
+
+    Spot:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6650f1c2a1b2c3d4e5f60b01
+        name:
+          type: string
+          example: Cafétéria
+        floor:
+          type: object
+          properties:
+            _id:
+              type: string
+            building:
+              type: string
+              enum: [Cheseaux, St-Roch]
+            level:
+              type: integer
+            letters:
+              type: array
+              items:
+                type: string
+            name:
+              type: string
+        image:
+          type: object
+          properties:
+            _id:
+              type: string
+            url:
+              type: string
+              format: uri
+            width:
+              type: integer
+            height:
+              type: integer
+        position:
+          $ref: "#/components/schemas/Position"
+        createdBy:
+          type: string
+          description: ID of the admin who created the spot.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+  headers:
+    PaginationPage:
+      description: Current page.
+      schema:
+        type: integer
+    PaginationPageSize:
+      description: Maximum number of items per page.
+      schema:
+        type: integer
+    PaginationTotal:
+      description: Total number of items matching the filters, all pages included.
+      schema:
+        type: integer
+
   parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    SpotId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: ID of the spot. An invalid ID gives 404.
     FloorId:
       name: id
       in: path
@@ -651,3 +781,172 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: "This floor still has spots: delete them first"
+
+  /spots:
+    get:
+      tags: [Spots]
+      summary: List the spots
+      description: Paginated, newest first. Filters are optional and can be combined. Admins only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: floor
+          in: query
+          required: false
+          description: Only the spots of this floor (ID).
+          schema:
+            type: string
+        - name: building
+          in: query
+          required: false
+          description: Only the spots of the floors of this building.
+          schema:
+            type: string
+            example: Cheseaux
+      responses:
+        "200":
+          description: One page of spots, possibly an empty array.
+          headers:
+            Pagination-Page:
+              $ref: "#/components/headers/PaginationPage"
+            Pagination-Page-Size:
+              $ref: "#/components/headers/PaginationPageSize"
+            Pagination-Total:
+              $ref: "#/components/headers/PaginationTotal"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Spot"
+        "400":
+          description: |
+            Invalid `page` or `pageSize`, `floor` is not a valid ID, or a filter is given more
+            than once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Query parameter "floor" must be a valid ID
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Spots]
+      summary: Create a spot
+      description: |
+        Admins only. `createdBy` is the current user; fields other than those below are
+        ignored.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/SpotFields"
+                - required: [name, floor, image, position]
+      responses:
+        "201":
+          description: Spot created.
+          headers:
+            Location:
+              description: URL of the new spot, e.g. `/spots/6650f1c2a1b2c3d4e5f60b01`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Spot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: |
+            A field is missing or invalid, the position is outside 0-100, or `floor` / `image`
+            does not reference an existing document. Errors on the position are reported under
+            `position.x` and `position.y`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+              example:
+                message: Validation failed
+                errors:
+                  floor: Floor must reference an existing floor
+                  position.y: Y must be between 0 and 100
+
+  /spots/{id}:
+    parameters:
+      - $ref: "#/components/parameters/SpotId"
+    get:
+      tags: [Spots]
+      summary: Get a spot
+      description: Admins only.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The spot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Spot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Spots]
+      summary: Update a spot
+      description: Admins only. Only the given fields change; `createdBy` cannot be changed.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpotFields"
+      responses:
+        "200":
+          description: The updated spot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Spot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: A field is invalid, or `floor` / `image` does not reference an existing document.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+    delete:
+      tags: [Spots]
+      summary: Delete a spot
+      description: Admins only.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Spot deleted. No body.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"

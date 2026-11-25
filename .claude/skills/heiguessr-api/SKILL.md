@@ -102,9 +102,15 @@ pour que les tests branchent leur base en mémoire.
   du bâtiment → 409), `name`, `plan` → Upload (`referenceTo`).
   `GET /floors?building=&letter=` et `GET /floors/:id` pour tout connecté (plan peuplé : `url`, `width`,
   `height`), `POST` (201 + `Location`), `PATCH` (liste blanche de champs), `DELETE` (204, 409 si des
-  spots y sont liés) pour les admins. Middleware local `loadFloor` (404 « Floor not found »).
-- `models/spot.js` : structure cible (`floor` → Floor, `image` → Upload, `position`, `createdBy`),
-  sans routes ni `referenceTo` : à compléter dans l'issue Spots.
+  spots y sont liés) pour les admins.
+- `models/spot.js` + `routes/spots.js` : `name`, `floor` → Floor et `image` → Upload
+  (`referenceTo`), `position { x, y }` (0-100, erreurs sous `position.x` / `position.y`),
+  `createdBy` posé par le serveur. **Toutes les routes admin** (le spot contient la réponse).
+  `GET /spots?floor=&building=&page=&pageSize=` paginé, plus récent d'abord, `floor` et `image`
+  peuplés. `POST` (201 + `Location`), `PATCH`, `DELETE` (204).
+- `middlewares/resources.js` : `loadDocument(Model, key, message)` (charge `req[key]` depuis
+  `:id`, 404 sinon), `pickFields(body, fields)` (liste blanche), `optionalQueryString` et
+  `optionalQueryId` (400 si répété ou id invalide). À utiliser pour chaque nouvelle ressource.
 - Tests : `test/helpers.js` (`useTestDatabase`, `createUser`, `createAdmin`, `createUpload`,
   `tokenFor`, `authHeader`), un fichier `*.test.js` par router / middleware.
 

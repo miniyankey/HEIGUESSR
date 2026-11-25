@@ -1,6 +1,7 @@
 import express from "express";
 import createError from "http-errors";
 import { authenticate, authenticateAdmin } from "../middlewares/auth.js";
+import { loadDocument, optionalQueryString, pickFields } from "../middlewares/resources.js";
 import Floor from "../models/floor.js";
 import Spot from "../models/spot.js";
 
@@ -12,34 +13,7 @@ const EDITABLE_FIELDS = ["building", "level", "letters", "name", "plan"];
 // Players need the plan image to place their guess
 const PLAN_FIELDS = "url width height";
 
-function pickEditableFields(body) {
-  const fields = {};
-  for (const field of EDITABLE_FIELDS) {
-    if (body?.[field] !== undefined) {
-      fields[field] = body[field];
-    }
-  }
-  return fields;
-}
-
-/** Loads the floor of `:id` into req.floor, or responds 404. */
-async function loadFloor(req, res, next) {
-  const floor = await Floor.findById(req.params.id);
-  if (!floor) {
-    throw createError(404, "Floor not found");
-  }
-  req.floor = floor;
-  next();
-}
-
-/** Reads an optional query parameter given at most once. */
-function optionalQueryString(req, name) {
-  const value = req.query[name];
-  if (value !== undefined && typeof value !== "string") {
-    throw createError(400, `Query parameter "${name}" must be given only once`);
-  }
-  return value;
-}
+const loadFloor = loadDocument(Floor, "floor", "Floor not found");
 
 // Optional filters: ?building=Cheseaux, ?letter=C (the floor that has this letter)
 router.get("/", authenticate, async (req, res) => {
@@ -65,13 +39,13 @@ router.get("/:id", authenticate, loadFloor, async (req, res) => {
 });
 
 router.post("/", authenticateAdmin, async (req, res) => {
-  const floor = await Floor.create(pickEditableFields(req.body));
+  const floor = await Floor.create(pickFields(req.body, EDITABLE_FIELDS));
   await floor.populate("plan", PLAN_FIELDS);
   res.status(201).location(`${req.baseUrl}/${floor.id}`).send(floor);
 });
 
 router.patch("/:id", authenticateAdmin, loadFloor, async (req, res) => {
-  req.floor.set(pickEditableFields(req.body));
+  req.floor.set(pickFields(req.body, EDITABLE_FIELDS));
   await req.floor.save();
   await req.floor.populate("plan", PLAN_FIELDS);
   res.send(req.floor);
