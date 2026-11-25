@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env --watch bin/start.js",
     "start": "node bin/start.js",
-    "test": "node --import ./test/setup-env.js --test --experimental-test-coverage --test-coverage-lines=75 --test-coverage-exclude=\"test/**\" \"test/**/*.test.js\""
+    "test": "node --import ./test/setup-env.js --test --experimental-test-coverage --test-coverage-lines=75 --test-coverage-exclude=\"test/**\" \"test/**/*.test.js\"",
+    "set-role": "node --env-file-if-exists=.env scripts/set-role.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

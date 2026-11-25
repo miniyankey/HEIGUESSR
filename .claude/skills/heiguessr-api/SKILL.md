@@ -67,8 +67,15 @@ pour que les tests branchent leur base en mémoire.
   8 caractères, signalé avec les autres champs invalides en 422 `{ message, errors }`. Doublon en 409.
 - `POST /auth/login` : `{ username, password }` donne `200 { token }`. 422 si champs manquants,
   401 si identifiants invalides.
-- `middlewares/auth.js` → `authenticate` : exige `Authorization: Bearer <jwt>` et pose
-  `req.currentUserId`. Sinon 401 avec l'en-tête `WWW-Authenticate: Bearer`.
+- `middlewares/auth.js` :
+  - `authenticate` : exige `Authorization: Bearer <jwt>` et pose `req.currentUserId`. Sinon 401 avec
+    l'en-tête `WWW-Authenticate: Bearer`.
+  - `loadCurrentUser` : charge `req.currentUser` depuis la base (401 si le compte n'existe plus).
+  - `requireAdmin` : 403 si `req.currentUser.role !== "admin"`. Le rôle n'est **pas** dans le JWT.
+  - `authenticateAdmin` = `[authenticate, loadCurrentUser, requireAdmin]` pour les routes admin.
+- `GET /users/me` (`routes/users.js`) : profil avec `role`.
+- `User.role` : `player` (défaut) ou `admin`, modifiable seulement par `npm run set-role -- <username> <role>`
+  (`scripts/set-role.js`). `/auth/register` ignore un `role` envoyé.
 - `middlewares/errors.js` → `notFound` et `errorHandler` : `ValidationError` → 422,
   `CastError` → 404, `11000` → 409 `{ message: "<champ> already in use" }`, http-errors gardent
   leur statut, 500 sans détail en production. Les routes **lèvent** des erreurs (`createError(403)`…),
@@ -80,11 +87,11 @@ pour que les tests branchent leur base en mémoire.
 - `models/upload.js` + `routes/uploads.js` : `POST /uploads/signature` signe un `public_id`
   `heiguessr/<userId>/<uuid>` choisi par le serveur, `allowed_formats=jpg,png,webp`,
   `overwrite=false`. `POST /uploads { publicId }` vérifie que l'id appartient à l'utilisateur, lit
-  les métadonnées **depuis Cloudinary**, refuse au-delà de 10 Mo puis enregistre.
+  les métadonnées **depuis Cloudinary**, refuse au-delà de 10 Mo puis enregistre. **Admins seulement.**
 - `openapi.yaml` servi sur `/api-docs` (`GET /` y redirige). CORS via `CORS_ORIGIN`, en-têtes
   `Location` et `Pagination-*` exposés au navigateur.
 - `bin/start.js` connecte MongoDB puis démarre le serveur ; `app.js` ne se connecte pas.
-- Tests : `test/helpers.js` (`useTestDatabase`, `createUser`, `tokenFor`, `authHeader`),
+- Tests : `test/helpers.js` (`useTestDatabase`, `createUser`, `createAdmin`, `tokenFor`, `authHeader`),
   un fichier `*.test.js` par router / middleware.
 - `models/spot.js` : brouillon sans routes, à refaire dans l'issue Spots.
 

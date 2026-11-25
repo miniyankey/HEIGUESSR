@@ -34,6 +34,16 @@ describe("POST /auth/register", () => {
     assert.equal(jwt.verify(res.body.token, jwtSecret).sub, user.id);
   });
 
+  it("ignores a role sent by the client: new users are players", async () => {
+    await supertest(app)
+      .post("/auth/register")
+      .send({ ...validRegistration, role: "admin" })
+      .expect(201);
+
+    const user = await User.findOne({ username: "alice_42" });
+    assert.equal(user.role, "player");
+  });
+
   it("returns 422 with a message per missing required field", async () => {
     const res = await supertest(app).post("/auth/register").send({}).expect(422);
 

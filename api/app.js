@@ -10,6 +10,7 @@ import { errorHandler, notFound } from "./middlewares/errors.js";
 import { paginationHeaders } from "./middlewares/pagination.js";
 import authRouter from "./routes/auth.js";
 import uploadsRouter from "./routes/uploads.js";
+import usersRouter from "./routes/users.js";
 
 const openApiDocument = parseYaml(
   readFileSync(new URL("./openapi.yaml", import.meta.url), "utf8"),
@@ -35,6 +36,7 @@ app.get("/", (req, res) => res.redirect("/api-docs"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 app.use("/auth", authRouter);
 app.use("/uploads", uploadsRouter);
+app.use("/users", usersRouter);
 
 app.use(notFound);
 app.use(errorHandler);
