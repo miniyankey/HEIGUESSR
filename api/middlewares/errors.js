@@ -13,7 +13,7 @@ export function notFound(req, res, next) {
  *
  * - Mongoose validation error -> 422 { message, errors: { field: message } }
  * - Invalid ObjectId (CastError) -> 404, the resource cannot exist
- * - Duplicate key (unique index) -> 409 { message: "<field> already in use" }
+ * - Duplicate key (unique index) -> 409 { message: "<fields> already in use" }
  * - http-errors / body-parser errors -> their own status
  * - Anything else -> 500, without internal details in production
  */
@@ -32,8 +32,9 @@ export function errorHandler(err, req, res, next) {
   }
 
   if (err.code === 11000) {
-    const field = Object.keys(err.keyPattern ?? {})[0] ?? "value";
-    return res.status(409).send({ message: `${field} already in use` });
+    // Several fields for a compound index, e.g. "building and level"
+    const fields = Object.keys(err.keyPattern ?? {}).join(" and ") || "value";
+    return res.status(409).send({ message: `${fields} already in use` });
   }
 
   const status = err.status ?? err.statusCode ?? 500;
