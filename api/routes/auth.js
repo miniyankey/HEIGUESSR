@@ -24,40 +24,29 @@ router.post("/login", async function (req, res) {
   res.send({ token });
 });
 
-router.post("/register", async function (req, res, next) {
+export const MIN_PASSWORD_LENGTH = 8;
+
+// Validation (422) and duplicate (409) errors are turned into responses by the
+// global error handler (middlewares/errors.js).
+router.post("/register", async function (req, res) {
   const { username, password, firstname, lastname, email } = req.body ?? {};
-  try {
-    if (!password || password.length < 8) {
-      return res
-        .status(400)
-        .send({ message: "Password must be at least 8 characters" });
-    }
-    const user = await User.create({
-      username,
-      firstname,
-      lastname,
-      email,
-      hash: await bcrypt.hash(password, 10),
-    });
-    const token = jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: "7d" });
-    return res.status(201).send({ token });
-  } catch (err) {
-    // Mongoose validation errors -> 400 with details per field
-    if (err.name === "ValidationError") {
-      const errors = {};
-      for (const [path, error] of Object.entries(err.errors)) {
-        errors[path] = error.message;
-      }
-      return res.status(400).send({ message: "Validation failed", errors });
-    }
-    // Duplicate username or email -> 409
-    if (err.code === 11000) {
-      const field = Object.keys(err.keyPattern)[0];
-      return res.status(409).send({ message: `${field} already in use` });
-    }
-    // Anything else -> your error handler in app.js
-    return next(err);
+  const user = new User({ username, firstname, lastname, email });
+
+  if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
+    // Report the password together with the other invalid fields. The hash
+    // is skipped: it cannot exist without a valid password.
+    user.invalidate(
+      "password",
+      `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+    );
+    await user.validate({ pathsToSkip: ["hash"] });
   }
+
+  user.hash = await bcrypt.hash(password, 10);
+  await user.save();
+
+  const token = jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: "7d" });
+  res.status(201).send({ token });
 });
 
 export default router;

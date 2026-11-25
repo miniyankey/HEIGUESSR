@@ -1,0 +1,653 @@
+openapi: 3.1.0
+info:
+  title: HEIGUESSR API
+  version: 0.1.0
+  description: |
+    REST API of HEIGUESSR, a "guess the location" game inside the HEIG-VD buildings.
+
+    ## Conventions
+
+    - Request and response bodies are JSON (`Content-Type: application/json`).
+    - Protected routes require an `Authorization: Bearer <token>` header with the JWT
+      returned by `POST /auth/register` or `POST /auth/login` (valid 7 days).
+    - Users are `player` (default) or `admin`. Admins manage the game content (images,
+      floors, spots); admin-only routes return `403` to players. The role cannot be set
+      through the API.
+    - Errors have a body `{ "message": "..." }`. Validation errors (422) add an
+      `errors` object with one message per invalid field.
+    - A malformed JSON body gives `400 Bad Request`.
+    - Paginated lists accept `?page=` (default 1) and `?pageSize=` (default 20, max 100),
+      return a JSON array and the headers `Pagination-Page`, `Pagination-Page-Size` and
+      `Pagination-Total` (total number of items). Invalid values give `400`.
+    - `500 Internal Server Error` can happen on any request and is not documented per route.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Authentication
+  - name: Users
+  - name: Uploads
+    description: |
+      **Admins only.** Images are uploaded **directly from the client to Cloudinary**, never through the API:
+
+      1. `POST /uploads/signature` returns a one-file upload signature.
+      2. The client sends a `multipart/form-data` POST to `uploadUrl` with `file`, `api_key`,
+         `signature` and every entry of `params` **unchanged**.
+      3. `POST /uploads` with the `public_id` returned by Cloudinary registers the image.
+  - name: Floors
+    description: |
+      Floor plans of the HEIG-VD buildings. Every logged-in user can read them (players
+      click on the plan to guess); only admins create, change and delete them.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+      example:
+        message: Your token is invalid or has expired
+
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+          example: Validation failed
+        errors:
+          type: object
+          description: One message per invalid field.
+          additionalProperties:
+            type: string
+      example:
+        message: Validation failed
+        errors:
+          username: Username must be at least 3 characters
+          password: Password must be at least 8 characters
+
+    Token:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: "JWT to send in the `Authorization: Bearer` header. Valid 7 days."
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6650f1c2a1b2c3d4e5f60001
+        username:
+          type: string
+          example: alice_42
+        email:
+          type: string
+          format: email
+          example: alice@heig-vd.ch
+        firstname:
+          type: string
+        lastname:
+          type: string
+        role:
+          type: string
+          enum: [player, admin]
+          description: Admins manage the game content.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Upload:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6650f1c2a1b2c3d4e5f60718
+        publicId:
+          type: string
+          example: heiguessr/6650f1c2a1b2c3d4e5f60001/0f8fad5b-d9cb-469f-a165-70867728950e
+        url:
+          type: string
+          format: uri
+          description: HTTPS URL of the image on Cloudinary.
+        format:
+          type: string
+          enum: [jpg, png, webp]
+        bytes:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+        owner:
+          type: string
+          description: ID of the user who uploaded the image.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    FloorFields:
+      type: object
+      properties:
+        building:
+          type: string
+          enum: [Cheseaux, St-Roch]
+          description: Leading/trailing spaces are removed.
+        level:
+          type: integer
+          description: |
+            Physical height, used to order the floors (0 = ground floor, negative = basement).
+            Unique per building.
+          example: 1
+        letters:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[A-Za-z]$"
+          description: |
+            Letters of the level (A = lowest, gaps allowed). Several letters when the level is
+            split into zones that are not connected. Stored uppercase and sorted. A letter
+            belongs to only one floor of a building. On update, replaces the whole list.
+          example: [C, D]
+        name:
+          type: string
+          maxLength: 100
+          example: Salles de cours
+        plan:
+          type: string
+          description: ID of an existing upload (see `POST /uploads`), the image of the plan.
+          example: 6650f1c2a1b2c3d4e5f60718
+
+    Floor:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6650f1c2a1b2c3d4e5f60a01
+        building:
+          type: string
+          enum: [Cheseaux, St-Roch]
+        level:
+          type: integer
+          example: 1
+        letters:
+          type: array
+          items:
+            type: string
+          example: [C, D]
+        name:
+          type: string
+          example: Salles de cours
+        plan:
+          type: object
+          description: The plan image. Positions on it are percentages (0-100) of its width and height.
+          properties:
+            _id:
+              type: string
+            url:
+              type: string
+              format: uri
+            width:
+              type: integer
+            height:
+              type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+  parameters:
+    FloorId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: ID of the floor. An invalid ID gives 404.
+
+  responses:
+    NotFound:
+      description: No resource with this ID.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: Floor not found
+    Unauthorized:
+      description: Missing, invalid or expired bearer token, or the account no longer exists.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            example: Bearer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The authenticated user is not an admin.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: Only admins can perform this operation
+
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Create an account
+      description: |
+        Creates a **player** and returns a token, so the user is logged in right away.
+        A `role` field in the body is ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 30
+                  pattern: "^[a-zA-Z0-9_]+$"
+                  description: Unique. Letters, numbers and underscores only. Leading/trailing spaces are removed.
+                  example: alice_42
+                email:
+                  type: string
+                  format: email
+                  description: Unique, stored in lowercase.
+                  example: alice@heig-vd.ch
+                password:
+                  type: string
+                  minLength: 8
+                  example: correct-horse
+                firstname:
+                  type: string
+                  maxLength: 50
+                lastname:
+                  type: string
+                  maxLength: 50
+      responses:
+        "201":
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "409":
+          description: The username or email is already used.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: username already in use
+        "422":
+          description: One or more fields are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: alice_42
+                password:
+                  type: string
+                  example: correct-horse
+      responses:
+        "200":
+          description: Valid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "401":
+          description: Unknown username or wrong password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Invalid name or password
+        "422":
+          description: "`username` or `password` is missing or not a string."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Name and password are required
+
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get the profile of the authenticated user
+      description: Includes the `role`, so the client knows whether to show admin screens.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /uploads/signature:
+    post:
+      tags: [Uploads]
+      summary: Get a signature to upload one image to Cloudinary
+      description: |
+        The signature is bound to a `public_id` chosen by the server
+        (`heiguessr/<userId>/<uuid>`), to the formats jpg, png and webp, and forbids
+        overwriting. It is valid for one hour. No request body. Admins only.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Signature and the parameters to send to Cloudinary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uploadUrl, apiKey, signature, params]
+                properties:
+                  uploadUrl:
+                    type: string
+                    format: uri
+                    example: https://api.cloudinary.com/v1_1/demo/image/upload
+                  apiKey:
+                    type: string
+                  signature:
+                    type: string
+                  params:
+                    type: object
+                    description: Send every entry unchanged with the file.
+                    required: [timestamp, public_id, allowed_formats, overwrite]
+                    properties:
+                      timestamp:
+                        type: integer
+                        description: Unix time in seconds.
+                      public_id:
+                        type: string
+                      allowed_formats:
+                        type: string
+                        example: jpg,png,webp
+                      overwrite:
+                        type: string
+                        enum: ["false"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /uploads:
+    post:
+      tags: [Uploads]
+      summary: Register an image uploaded to Cloudinary
+      description: |
+        Only `publicId` is read from the request: the URL, format, size and dimensions are
+        fetched from Cloudinary. An image that is not jpg/png/webp or is larger than 10 MB
+        is deleted from Cloudinary and refused. Admins only.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [publicId]
+              properties:
+                publicId:
+                  type: string
+                  description: |
+                    The `public_id` returned by Cloudinary. Must be one issued to the current
+                    user by `POST /uploads/signature`.
+      responses:
+        "201":
+          description: Image registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No image with this `publicId` on Cloudinary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: This image is already registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: |
+            `publicId` is missing, does not belong to the current user, or the image has a
+            forbidden format or size (it is then deleted from Cloudinary).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /floors:
+    get:
+      tags: [Floors]
+      summary: List the floors
+      description: Sorted by building, then level. Not paginated (a few dozen floors at most).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: building
+          in: query
+          required: false
+          description: Only the floors of this building. Given more than once, gives 400.
+          schema:
+            type: string
+            example: Cheseaux
+        - name: letter
+          in: query
+          required: false
+          description: Only the floor that has this letter (case ignored). Given more than once, gives 400.
+          schema:
+            type: string
+            example: C
+      responses:
+        "200":
+          description: The floors, possibly an empty array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Floor"
+        "400":
+          description: "`building` or `letter` is given more than once."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Floors]
+      summary: Create a floor
+      description: Admins only. Fields other than those below are ignored.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/FloorFields"
+                - required: [building, level, letters, plan]
+      responses:
+        "201":
+          description: Floor created.
+          headers:
+            Location:
+              description: URL of the new floor, e.g. `/floors/6650f1c2a1b2c3d4e5f60a01`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Floor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: The building already has a floor at this level, or with one of these letters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                level:
+                  value:
+                    message: building and level already in use
+                letter:
+                  value:
+                    message: building and letters already in use
+        "422":
+          description: A field is missing or invalid, or `plan` is not an existing upload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+              example:
+                message: Validation failed
+                errors:
+                  plan: Plan must reference an existing upload
+
+  /floors/{id}:
+    parameters:
+      - $ref: "#/components/parameters/FloorId"
+    get:
+      tags: [Floors]
+      summary: Get a floor
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The floor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Floor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Floors]
+      summary: Update a floor
+      description: Admins only. Only the given fields change; other fields are ignored.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FloorFields"
+      responses:
+        "200":
+          description: The updated floor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Floor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The building already has a floor at this level, or with one of these letters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: A field is invalid, or `plan` is not an existing upload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+    delete:
+      tags: [Floors]
+      summary: Delete a floor
+      description: Admins only. Refused while spots are placed on the floor.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Floor deleted. No body.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Spots are still placed on this floor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "This floor still has spots: delete them first"

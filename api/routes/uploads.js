@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 import { v2 as cloudinary } from "cloudinary";
 import express from "express";
 import { cloudinaryConfig } from "../config.js";
-import { authenticate } from "../middlewares/auth.js";
+import { authenticateAdmin } from "../middlewares/auth.js";
 import Upload from "../models/upload.js";
 
 const router = express.Router();
+
+// Images are plans and spot photos: only admins upload them.
+router.use(authenticateAdmin);
 
 cloudinary.config({
   cloud_name: cloudinaryConfig.cloudName,
@@ -32,7 +35,7 @@ function escapeRegExp(text) {
  * Cloudinary. The public_id is chosen by the server and is part of the
  * signature, so the client cannot change where the file goes, nor its format.
  */
-router.post("/signature", authenticate, (req, res) => {
+router.post("/signature", (req, res) => {
   const params = {
     timestamp: Math.round(Date.now() / 1000),
     public_id: `${userPrefix(req.currentUserId)}${randomUUID()}`,
@@ -60,7 +63,7 @@ router.post("/signature", authenticate, (req, res) => {
  * Only the publicId is taken from the client: all other data comes from
  * Cloudinary itself, so the client cannot forge the URL, size, etc.
  */
-router.post("/", authenticate, async (req, res) => {
+router.post("/", async (req, res) => {
   const { publicId } = req.body ?? {};
   const ownPublicId = new RegExp(
     `^${escapeRegExp(userPrefix(req.currentUserId))}[0-9a-f-]{36}$`,

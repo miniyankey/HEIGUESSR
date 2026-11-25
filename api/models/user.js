@@ -41,6 +41,16 @@ const userSchema = new mongoose.Schema(
       required: true,
       select: false, // excluded from queries by default
     },
+    // Admins manage floors and spots. The role can never be set through the
+    // API: use `npm run set-role` (scripts/set-role.js).
+    role: {
+      type: String,
+      enum: {
+        values: ["player", "admin"],
+        message: "Role must be player or admin",
+      },
+      default: "player",
+    },
     /**** POUR PLUS TARD SI ON VEUT IMPLEMENTER *****/
     // isVerified: {
     //   type: Boolean,

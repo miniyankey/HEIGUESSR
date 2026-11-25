@@ -35,7 +35,7 @@ ne committe jamais toi-même, donne les commits par message.
 cd api
 npm run dev     # node --env-file-if-exists=.env --watch bin/start.js
 npm start       # production, variables fournies par Render
-npm test        # à créer, voir « Tests »
+npm test        # tests + couverture (seuil 75 %), voir « Tests »
 ```
 
 Variables (`api/.env`, modèle dans `.env.example`, ne jamais commiter `.env`) :
@@ -59,30 +59,54 @@ api/
 ```
 
 `app.js` ne doit **pas** appeler `mongoose.connect` : la connexion se fait dans `bin/start.js`,
-pour que les tests branchent leur base en mémoire. (Actuellement `app.js` le fait : à déplacer.)
+pour que les tests branchent leur base en mémoire.
 
 ## Ce qui existe déjà
 
 - `POST /auth/register` : crée l'utilisateur, renvoie `201 { token }`. Mot de passe d'au moins
-  8 caractères. Validation Mongoose renvoyée en 400 `{ message, errors: { champ: msg } }`,
-  doublon en 409.
+  8 caractères, signalé avec les autres champs invalides en 422 `{ message, errors }`. Doublon en 409.
 - `POST /auth/login` : `{ username, password }` donne `200 { token }`. 422 si champs manquants,
   401 si identifiants invalides.
-- `middlewares/auth.js` → `authenticate` : exige `Authorization: Bearer <jwt>` et pose
-  `req.currentUserId`. Sinon 401 avec l'en-tête `WWW-Authenticate: Bearer`.
+- `middlewares/auth.js` :
+  - `authenticate` : exige `Authorization: Bearer <jwt>` et pose `req.currentUserId`. Sinon 401 avec
+    l'en-tête `WWW-Authenticate: Bearer`.
+  - `loadCurrentUser` : charge `req.currentUser` depuis la base (401 si le compte n'existe plus).
+  - `requireAdmin` : 403 si `req.currentUser.role !== "admin"`. Le rôle n'est **pas** dans le JWT.
+  - `authenticateAdmin` = `[authenticate, loadCurrentUser, requireAdmin]` pour les routes admin.
+- `GET /users/me` (`routes/users.js`) : profil avec `role`.
+- `User.role` : `player` (défaut) ou `admin`, modifiable seulement par `npm run set-role -- <username> <role>`
+  (`scripts/set-role.js`). `/auth/register` ignore un `role` envoyé.
+- `middlewares/errors.js` → `notFound` et `errorHandler` : `ValidationError` → 422,
+  `CastError` → 404, `11000` → 409 `{ message: "<champs> already in use" }` (« building and level »
+  pour un index composé), http-errors gardent
+  leur statut, 500 sans détail en production. Les routes **lèvent** des erreurs (`createError(403)`…),
+  elles ne construisent pas elles-mêmes ces réponses.
+- `middlewares/pagination.js` → `paginate` (pose `req.pagination = { page, pageSize, skip }`,
+  400 si invalide) et `setPaginationHeaders(res, req.pagination, total)`. À utiliser pour toute liste.
 - `models/user.js` : `username` (3-30, `[a-zA-Z0-9_]`, unique), `email` (unique, validé),
   `firstname`, `lastname`, `hash` (`select: false`, retiré du JSON), timestamps.
-- `models/spot.js`, `models/image.js` : brouillons sans routes. `image.js` (stockage local) est
-  **obsolète** et remplacé par `Upload` (Cloudinary).
-- Branche `9-find-a-method-to-store-images-and-implement-it` (pas encore mergée) :
-  - `models/upload.js` : `publicId`, `url`, `format`, `bytes`, `width`, `height`, `owner`.
-  - `routes/uploads.js` : `POST /uploads/signature` signe un `public_id`
-    `heiguessr/<userId>/<uuid>` choisi par le serveur, `allowed_formats=jpg,png,webp` et
-    `overwrite=false`. `POST /uploads { publicId }` vérifie que l'id appartient à l'utilisateur,
-    lit les métadonnées **depuis Cloudinary** (jamais depuis le client), refuse au-delà de 10 Mo
-    puis enregistre.
-  - CORS configurable via `CORS_ORIGIN`, Cloudinary obligatoire au démarrage.
-- `routes/index.js` → `GET /me` et `routes/users.js` sont des routes de test **à remplacer**.
+- `models/upload.js` + `routes/uploads.js` : `POST /uploads/signature` signe un `public_id`
+  `heiguessr/<userId>/<uuid>` choisi par le serveur, `allowed_formats=jpg,png,webp`,
+  `overwrite=false`. `POST /uploads { publicId }` vérifie que l'id appartient à l'utilisateur, lit
+  les métadonnées **depuis Cloudinary**, refuse au-delà de 10 Mo puis enregistre. **Admins seulement.**
+- `openapi.yaml` servi sur `/api-docs` (`GET /` y redirige). CORS via `CORS_ORIGIN`, en-têtes
+  `Location` et `Pagination-*` exposés au navigateur.
+- `bin/start.js` connecte MongoDB puis démarre le serveur ; `app.js` ne se connecte pas.
+- `models/validators.js` → `referenceTo(modelName, message)` : validateur de schéma qui vérifie
+  qu'un ObjectId pointe vers un document existant (422 à la création **et** à la mise à jour). Ajouter
+  aussi `cast: "<message>"` sur le champ pour un id mal formé. À réutiliser pour `Spot.floor`/`image`.
+- `models/floor.js` + `routes/floors.js` : `building` (enum `BUILDINGS` = Cheseaux, St-Roch),
+  `level` (entier, hauteur physique pour l'ordre, unique par bâtiment → 409), `letters` (lettres
+  HEIG-VD de l'étage, A = le plus bas, trous possibles ; **plusieurs** lettres quand l'étage a des
+  zones non reliées, ex. `["C", "D"]` ; majuscules, triées, une lettre n'appartient qu'à un étage
+  du bâtiment → 409), `name`, `plan` → Upload (`referenceTo`).
+  `GET /floors?building=&letter=` et `GET /floors/:id` pour tout connecté (plan peuplé : `url`, `width`,
+  `height`), `POST` (201 + `Location`), `PATCH` (liste blanche de champs), `DELETE` (204, 409 si des
+  spots y sont liés) pour les admins. Middleware local `loadFloor` (404 « Floor not found »).
+- `models/spot.js` : structure cible (`floor` → Floor, `image` → Upload, `position`, `createdBy`),
+  sans routes ni `referenceTo` : à compléter dans l'issue Spots.
+- Tests : `test/helpers.js` (`useTestDatabase`, `createUser`, `createAdmin`, `createUpload`,
+  `tokenFor`, `authHeader`), un fichier `*.test.js` par router / middleware.
 
 ## Modèle de domaine (cible)
 
@@ -93,7 +117,7 @@ l'image du plan, indépendants de la résolution. Le client et l'API utilisent l
 | --- | --- | --- |
 | `User` | + `role: "player" \| "admin"` (défaut `player`) | |
 | `Upload` | voir ci-dessus | `owner` → User |
-| `Floor` (plan d'étage) | `building` (ex. « Cheseaux »), `level` (Number), `name`, `plan` | `plan` → Upload. Unique (`building`, `level`) |
+| `Floor` (plan d'étage) | `building` (Cheseaux / St-Roch), `level` (Number), `letters` ([A-Z], ≥ 1), `name`, `plan` | `plan` → Upload. Unique (`building`, `level`) et (`building`, lettre) |
 | `Spot` (zone de spawn) | `name`, `position { x, y }`, `createdBy` | `floor` → Floor, `image` → Upload, `createdBy` → User |
 | `Game` | `code` (6 car. A-Z0-9, unique), `status: waiting \| playing \| finished`, `roundCount`, `currentRound`, `rounds: [{ spot, startedAt }]` | `host` → User, `players` → [User], `rounds.spot` → Spot |
 | `Guess` | `round` (index), `floor`, `position { x, y }`, `distance`, `score` | `game` → Game, `player` → User, `floor` → Floor. Unique (`game`, `round`, `player`) |
@@ -169,11 +193,12 @@ Score proposé (à valider par l'équipe) : mauvais étage = 0, sinon
 
 ## Tests (node:test)
 
-- Script : `node --test --experimental-test-coverage --test-coverage-lines=75 --test-coverage-include="**/*.js" --test-coverage-exclude="test/**" test/`.
-  Le seuil fait échouer `npm test` en dessous de 75 %.
-- `test/setup.js` : fixe les variables d'environnement de test, démarre `mongodb-memory-server`,
-  `mongoose.connect` avant tout, vide les collections dans `beforeEach`, puis déconnexion et arrêt.
-  Aucune dépendance au `.env` local, au réseau ou à Cloudinary.
+- `npm test` : `node --import ./test/setup-env.js --test --experimental-test-coverage
+  --test-coverage-lines=75` sur `test/**/*.test.js`. Sous 75 % de lignes couvertes, `npm test` échoue.
+- `test/setup-env.js` fixe les variables d'environnement de test. Chaque fichier de test appelle
+  `useTestDatabase()` (`test/helpers.js`) : MongoDB en mémoire démarrée pour le fichier, collections
+  vidées avant chaque test, arrêt à la fin. Aucune dépendance au `.env` local, au réseau ou à Cloudinary.
+- Un middleware partagé se teste via une petite app Express de test (voir `test/middlewares.test.js`).
 - Cloudinary : `mock.method(cloudinary.api, 'resource', ...)` et
   `mock.method(cloudinary.uploader, 'destroy', ...)`. Temps réel : mock de `publishGameEvent`.
 - **Un test = une seule requête REST** testée. Les données nécessaires sont créées directement
