@@ -1,4 +1,7 @@
-export const port = process.env.PORT ?? 27017;
+export const port = Number(process.env.PORT ?? 3000);
+
+// Hides internal error messages from responses in production.
+export const isProduction = process.env.NODE_ENV === "production";
 
 export const databaseUrl = process.env.MONGODB_URI ?? "mongodb://127.0.0.1/api";
 

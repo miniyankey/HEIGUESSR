@@ -1,6 +1,10 @@
-import app from '../app.js';
+import mongoose from "mongoose";
+import app from "../app.js";
+import { databaseUrl, port } from "../config.js";
 
-const port = process.env.PORT ?? 3000;
+// The database connection lives here (not in app.js) so tests can connect
+// the app to their own in-memory database.
+await mongoose.connect(databaseUrl);
 
 app.listen(port, function (error) {
   if (error) {
