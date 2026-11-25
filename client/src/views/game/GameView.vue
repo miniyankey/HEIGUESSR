@@ -1,5 +1,33 @@
 <script setup>
+// Game screen. The photo of the round will come from the game API; choosing a
+// floor and clicking on its plan already work with GET /floors.
+import { computed, onMounted, ref } from 'vue'
+import { listFloors } from '@/api/resources.js'
 import ComingSoon from '@/components/ComingSoon.vue'
+import PlanPicker from '@/components/PlanPicker.vue'
+
+const floors = ref([])
+const floorId = ref('')
+const position = ref(null)
+const error = ref('')
+
+const floor = computed(() => floors.value.find((f) => f._id === floorId.value))
+
+function floorLabel(f) {
+  return `${f.building} – ${f.letters.join(', ')}${f.name ? ` (${f.name})` : ''}`
+}
+
+function onFloorChange() {
+  position.value = null
+}
+
+onMounted(async () => {
+  try {
+    floors.value = await listFloors()
+  } catch (err) {
+    error.value = err.message
+  }
+})
 </script>
 
 <template>
@@ -12,7 +40,21 @@ import ComingSoon from '@/components/ComingSoon.vue'
   </section>
 
   <section>
-    <p>Choix de l'étage, puis clic sur son plan.</p>
+    <label>
+      Étage
+      <select v-model="floorId" @change="onFloorChange">
+        <option value="" disabled>Choisir un étage</option>
+        <option v-for="f in floors" :key="f._id" :value="f._id">{{ floorLabel(f) }}</option>
+      </select>
+    </label>
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="!error && floors.length === 0">Aucun étage n'a encore été créé.</p>
+
+    <template v-if="floor">
+      <p>Cliquez sur le plan à l'endroit de la photo.</p>
+      <PlanPicker v-model="position" :src="floor.plan.url" :alt="`Plan ${floorLabel(floor)}`" />
+      <p v-if="position">Position : x = {{ position.x }} %, y = {{ position.y }} %</p>
+    </template>
   </section>
 
   <nav class="actions">
