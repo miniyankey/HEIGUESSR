@@ -9,14 +9,14 @@ Mettre à jour ce fichier quand un critère avance.
 | --- | --- | --- |
 | Inscription | ✅ | `POST /auth/register` (validation en 422) |
 | Authentification | ✅ | `POST /auth/login` → JWT |
-| ≥ 2 autres types de ressources, liés entre eux | ❌ | `Floor` ← `Spot` → `Upload` ; `Game` → `Spot`, `Guess` → `Game` |
+| ≥ 2 autres types de ressources, liés entre eux | 🟡 | `Floor` → `Upload` fait ; `Floor` ← `Spot` → `Upload` ; `Game` → `Spot`, `Guess` → `Game` |
 | Au moins un type lié aux utilisateurs | ❌ | `Game.host` / `Game.players`, `Guess.player`, `Spot.createdBy`, `Upload.owner` (🟡) |
-| CRUD minimal utilisable par une app mobile | ❌ | floors, spots, games, guesses |
+| CRUD minimal utilisable par une app mobile | 🟡 | floors ✅ ; spots, games, guesses |
 | Liste paginée | ❌ | helper `paginate` prêt ; `GET /games`, `GET /spots`, `GET /leaderboard` |
-| Liste avec filtres optionnels | ❌ | `GET /spots?floor=&building=`, `GET /games?status=&code=` |
+| Liste avec filtres optionnels | 🟡 | `GET /floors?building=&letter=` ✅ ; `GET /spots?floor=&building=`, `GET /games?status=&code=` |
 | Agrégation MongoDB | ❌ | `GET /users/:id/stats`, `GET /leaderboard` (`$group` sur `Guess`) |
 | Authentification JWT sur opérations sensibles | 🟡 | `authenticate` / `authenticateAdmin` ; à appliquer à chaque nouvelle route |
-| Autorisations cohérentes avec le domaine | 🟡 | rôle admin en place, `/uploads` réservé aux admins ; admin seul pour floors/spots/uploads ; host seul pour démarrer/supprimer une partie ; joueurs seuls pour voir/guess |
+| Autorisations cohérentes avec le domaine | 🟡 | rôle admin en place, `/uploads` et l'écriture de `/floors` réservés aux admins ; admin seul pour floors/spots/uploads ; host seul pour démarrer/supprimer une partie ; joueurs seuls pour voir/guess |
 | ≥ 1 opération limitant un utilisateur authentifié | ✅ | `/uploads` réservé aux admins (403 pour un joueur) ; aussi `PATCH /games/:id` réservé au host, `/spots` réservé aux admins |
 | Composante temps réel intégrée | ❌ | wsmini, événements publiés par les routes REST (cours DevMobile) |
 | Fonctionnalité mobile (bonus) | 🟡 | images (Cloudinary, upload direct) |
@@ -32,14 +32,14 @@ Mettre à jour ce fichier quand un critère avance.
 
 | Critère | État | Notes |
 | --- | --- | --- |
-| Doc complète (chemins, params, en-têtes, corps, validations, réponses + codes) | 🟡 | `api/openapi.yaml` + Swagger UI sur `/api-docs` : `/auth` et `/uploads` faits. Documenter chaque nouvelle route (401/403/404/409/422, pas 500) |
+| Doc complète (chemins, params, en-têtes, corps, validations, réponses + codes) | 🟡 | `api/openapi.yaml` + Swagger UI sur `/api-docs` : `/auth`, `/users/me`, `/uploads` et `/floors` faits. Documenter chaque nouvelle route (401/403/404/409/422, pas 500) |
 
 ## Tests automatisés
 
 | Critère | État | Notes |
 | --- | --- | --- |
 | ≥ 75 % de couverture, tests de qualité | 🟡 | `npm test` avec seuil 75 % (≈ 94 % actuellement) ; à maintenir pour chaque ressource |
-| Tous les types d'opérations (create, read, list, update, delete) | 🟡 | seulement des create pour l'instant ; un fichier de test par router |
+| Tous les types d'opérations (create, read, list, update, delete) | 🟡 | CRUD complet testé pour `/floors` ; un fichier de test par router |
 | Cas d'erreur, pas seulement le happy path | 🟡 | 401, 403, 404, 409, 422 pour chaque route |
 | Un test = une opération REST | 🟡 | fixtures créées via les modèles, pas via l'API |
 | Reproductible (`npm test` plusieurs fois) | ✅ | `mongodb-memory-server`, collections vidées, Cloudinary/WS mockés |
@@ -48,13 +48,13 @@ Mettre à jour ce fichier quand un critère avance.
 
 | Critère | État | Notes |
 | --- | --- | --- |
-| Méthodes, en-têtes et codes HTTP appropriés | 🟡 | 422 uniformisé pour la validation ; 201 + `Location`, 204 pour les nouvelles ressources |
+| Méthodes, en-têtes et codes HTTP appropriés | 🟡 | 422 uniformisé pour la validation ; 201 + `Location`, 204 (fait pour `/floors`) |
 | Hiérarchie d'URL cohérente | ❌ | ressources au pluriel, sous-ressources imbriquées |
 | Code asynchrone correct | 🟡 | Express 5 gère les rejets ; `await` partout |
 | Erreurs async gérées dans les routes | ✅ | Express 5 + `middlewares/errors.js` (Mongoose → 404/409/422) |
 | Pas de duplication excessive (middlewares) | 🟡 | erreurs et pagination centralisées ; à garder pour les nouvelles routes |
-| Validations des entrées (Mongoose) | 🟡 | `User` ok, autres modèles à faire |
-| Existence des ressources liées validée | ❌ | `floor`, `image`, `spot`, joueurs… |
+| Validations des entrées (Mongoose) | 🟡 | `User`, `Floor` ok, autres modèles à faire |
+| Existence des ressources liées validée | 🟡 | `referenceTo` : `Floor.plan` ✅ ; `floor`, `image`, `spot`, joueurs… |
 
 ## Dettes connues
 

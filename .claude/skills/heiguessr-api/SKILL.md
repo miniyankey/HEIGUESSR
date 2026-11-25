@@ -77,7 +77,8 @@ pour que les tests branchent leur base en mémoire.
 - `User.role` : `player` (défaut) ou `admin`, modifiable seulement par `npm run set-role -- <username> <role>`
   (`scripts/set-role.js`). `/auth/register` ignore un `role` envoyé.
 - `middlewares/errors.js` → `notFound` et `errorHandler` : `ValidationError` → 422,
-  `CastError` → 404, `11000` → 409 `{ message: "<champ> already in use" }`, http-errors gardent
+  `CastError` → 404, `11000` → 409 `{ message: "<champs> already in use" }` (« building and level »
+  pour un index composé), http-errors gardent
   leur statut, 500 sans détail en production. Les routes **lèvent** des erreurs (`createError(403)`…),
   elles ne construisent pas elles-mêmes ces réponses.
 - `middlewares/pagination.js` → `paginate` (pose `req.pagination = { page, pageSize, skip }`,
@@ -91,9 +92,21 @@ pour que les tests branchent leur base en mémoire.
 - `openapi.yaml` servi sur `/api-docs` (`GET /` y redirige). CORS via `CORS_ORIGIN`, en-têtes
   `Location` et `Pagination-*` exposés au navigateur.
 - `bin/start.js` connecte MongoDB puis démarre le serveur ; `app.js` ne se connecte pas.
-- Tests : `test/helpers.js` (`useTestDatabase`, `createUser`, `createAdmin`, `tokenFor`, `authHeader`),
-  un fichier `*.test.js` par router / middleware.
-- `models/spot.js` : brouillon sans routes, à refaire dans l'issue Spots.
+- `models/validators.js` → `referenceTo(modelName, message)` : validateur de schéma qui vérifie
+  qu'un ObjectId pointe vers un document existant (422 à la création **et** à la mise à jour). Ajouter
+  aussi `cast: "<message>"` sur le champ pour un id mal formé. À réutiliser pour `Spot.floor`/`image`.
+- `models/floor.js` + `routes/floors.js` : `building` (enum `BUILDINGS` = Cheseaux, St-Roch),
+  `level` (entier, hauteur physique pour l'ordre, unique par bâtiment → 409), `letters` (lettres
+  HEIG-VD de l'étage, A = le plus bas, trous possibles ; **plusieurs** lettres quand l'étage a des
+  zones non reliées, ex. `["C", "D"]` ; majuscules, triées, une lettre n'appartient qu'à un étage
+  du bâtiment → 409), `name`, `plan` → Upload (`referenceTo`).
+  `GET /floors?building=&letter=` et `GET /floors/:id` pour tout connecté (plan peuplé : `url`, `width`,
+  `height`), `POST` (201 + `Location`), `PATCH` (liste blanche de champs), `DELETE` (204, 409 si des
+  spots y sont liés) pour les admins. Middleware local `loadFloor` (404 « Floor not found »).
+- `models/spot.js` : structure cible (`floor` → Floor, `image` → Upload, `position`, `createdBy`),
+  sans routes ni `referenceTo` : à compléter dans l'issue Spots.
+- Tests : `test/helpers.js` (`useTestDatabase`, `createUser`, `createAdmin`, `createUpload`,
+  `tokenFor`, `authHeader`), un fichier `*.test.js` par router / middleware.
 
 ## Modèle de domaine (cible)
 
@@ -104,7 +117,7 @@ l'image du plan, indépendants de la résolution. Le client et l'API utilisent l
 | --- | --- | --- |
 | `User` | + `role: "player" \| "admin"` (défaut `player`) | |
 | `Upload` | voir ci-dessus | `owner` → User |
-| `Floor` (plan d'étage) | `building` (ex. « Cheseaux »), `level` (Number), `name`, `plan` | `plan` → Upload. Unique (`building`, `level`) |
+| `Floor` (plan d'étage) | `building` (Cheseaux / St-Roch), `level` (Number), `letters` ([A-Z], ≥ 1), `name`, `plan` | `plan` → Upload. Unique (`building`, `level`) et (`building`, lettre) |
 | `Spot` (zone de spawn) | `name`, `position { x, y }`, `createdBy` | `floor` → Floor, `image` → Upload, `createdBy` → User |
 | `Game` | `code` (6 car. A-Z0-9, unique), `status: waiting \| playing \| finished`, `roundCount`, `currentRound`, `rounds: [{ spot, startedAt }]` | `host` → User, `players` → [User], `rounds.spot` → Spot |
 | `Guess` | `round` (index), `floor`, `position { x, y }`, `distance`, `score` | `game` → Game, `player` → User, `floor` → Floor. Unique (`game`, `round`, `player`) |
