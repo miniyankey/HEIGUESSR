@@ -46,7 +46,7 @@ Ne jamais coder d'URL en dur dans les composants.
 | `store/` | état **réactif partagé** par toutes les pages, créé une fois au niveau du module | `useSession.js` |
 | `utils/` | fonctions simples, **sans état réactif** | `navigation.js` |
 | `api/` | appels HTTP vers l'API | `http.js`, `resources.js` |
-| `components/` | composants réutilisables | `ComingSoon.vue` |
+| `components/` | composants réutilisables | `PlanPicker.vue` |
 | `views/` | un écran par page, rangé par partie de l'application : `auth/`, `game/` (parcours d'une partie), `profile/`, `admin/` ; `HomeView.vue` à la racine | `views/admin/AdminSpotsView.vue` |
 
 `store/useRoutes.js` (convention du cours) est une liste fixe de pages, pas un état partagé.
@@ -63,12 +63,15 @@ Ne jamais coder d'URL en dur dans les composants.
 - `api/http.js` : `request(path, { method, body, query })` → `{ data, headers }`, préfixe
   `VITE_API_URL` (défaut `http://localhost:3000`, voir `.env.example`), token, `ApiError` avec
   `status`, `message`, `errors` (422). Sur 401 avec token : déconnexion. `readPagination(headers)`.
-- `api/resources.js` : une fonction par route (`login`, `register`, `getMe`).
+- `api/resources.js` : une fonction par route (`login`, `getMe`, `listFloors`, `listSpots`…,
+  `uploadImage(file)` pour le flux Cloudinary complet) et `BUILDINGS` (même liste que l'API).
 - `store/useSession.js` : `session` (`token` dans `localStorage`, `user`), `isLoggedIn`, `isAdmin`,
   `login`, `register`, `loadUser`, `logout`.
-- `components/` : `ComingSoon` (écran en attente d'une API).
-- Écrans **fonctionnels** : connexion, inscription, accueil, profil, menu admin.
-- Étages, photos et choix de l'étage dans l'écran de jeu : `ComingSoon`, faits dans l'issue #23.
+- `components/` : `PlanPicker` (clic sur un plan → `{ x, y }` en %, marqueur), `ImageUpload`
+  (upload admin, émet le document `Upload`), `ComingSoon` (écran en attente d'une API).
+- Écrans **fonctionnels** : connexion, inscription, accueil, profil, admin, étages (CRUD + plan),
+  photos (spots : liste paginée et filtrée, CRUD, photo + placement sur le plan), écran de jeu
+  (choix de l'étage et clic sur le plan seulement).
 - Écrans **de base** (`ComingSoon`, en attente de l'API des parties, stats et utilisateurs) : liste
   des parties, création, salle d'attente, résultat de manche, résultat final, historique,
   utilisateurs. Leurs liens « (démo) » suivent le parcours prévu.
@@ -86,7 +89,7 @@ Ne jamais coder d'URL en dur dans les composants.
 | `#play/<id>` | GameView : photo, étage, clic sur le plan | joueur | étages ✅, partie à venir |
 | `#round-result/<id>`, `#final-result/<id>` | résultats et classement | joueur | à venir |
 | `#profile`, `#history` | ProfileView, HistoryView (stats, parties) | connecté | profil ✅, stats à venir |
-| `#admin`, `#admin-floors`, `#admin-spots` | menu, étages, photos | admin | ✅ (écrans dans #23) |
+| `#admin`, `#admin-floors`, `#admin-spots` | menu, étages, photos | admin | ✅ |
 | `#admin-users` | AdminUsersView : rôles, suppression | admin | à venir (rôle via `set-role` pour l'instant) |
 
 L'API reste juge des droits : le client ne fait que masquer l'UI.
