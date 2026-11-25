@@ -35,7 +35,7 @@ ne committe jamais toi-même, donne les commits par message.
 cd api
 npm run dev     # node --env-file-if-exists=.env --watch bin/start.js
 npm start       # production, variables fournies par Render
-npm test        # à créer, voir « Tests »
+npm test        # tests + couverture (seuil 75 %), voir « Tests »
 ```
 
 Variables (`api/.env`, modèle dans `.env.example`, ne jamais commiter `.env`) :
@@ -59,30 +59,34 @@ api/
 ```
 
 `app.js` ne doit **pas** appeler `mongoose.connect` : la connexion se fait dans `bin/start.js`,
-pour que les tests branchent leur base en mémoire. (Actuellement `app.js` le fait : à déplacer.)
+pour que les tests branchent leur base en mémoire.
 
 ## Ce qui existe déjà
 
 - `POST /auth/register` : crée l'utilisateur, renvoie `201 { token }`. Mot de passe d'au moins
-  8 caractères. Validation Mongoose renvoyée en 400 `{ message, errors: { champ: msg } }`,
-  doublon en 409.
+  8 caractères, signalé avec les autres champs invalides en 422 `{ message, errors }`. Doublon en 409.
 - `POST /auth/login` : `{ username, password }` donne `200 { token }`. 422 si champs manquants,
   401 si identifiants invalides.
 - `middlewares/auth.js` → `authenticate` : exige `Authorization: Bearer <jwt>` et pose
   `req.currentUserId`. Sinon 401 avec l'en-tête `WWW-Authenticate: Bearer`.
+- `middlewares/errors.js` → `notFound` et `errorHandler` : `ValidationError` → 422,
+  `CastError` → 404, `11000` → 409 `{ message: "<champ> already in use" }`, http-errors gardent
+  leur statut, 500 sans détail en production. Les routes **lèvent** des erreurs (`createError(403)`…),
+  elles ne construisent pas elles-mêmes ces réponses.
+- `middlewares/pagination.js` → `paginate` (pose `req.pagination = { page, pageSize, skip }`,
+  400 si invalide) et `setPaginationHeaders(res, req.pagination, total)`. À utiliser pour toute liste.
 - `models/user.js` : `username` (3-30, `[a-zA-Z0-9_]`, unique), `email` (unique, validé),
   `firstname`, `lastname`, `hash` (`select: false`, retiré du JSON), timestamps.
-- `models/spot.js`, `models/image.js` : brouillons sans routes. `image.js` (stockage local) est
-  **obsolète** et remplacé par `Upload` (Cloudinary).
-- Branche `9-find-a-method-to-store-images-and-implement-it` (pas encore mergée) :
-  - `models/upload.js` : `publicId`, `url`, `format`, `bytes`, `width`, `height`, `owner`.
-  - `routes/uploads.js` : `POST /uploads/signature` signe un `public_id`
-    `heiguessr/<userId>/<uuid>` choisi par le serveur, `allowed_formats=jpg,png,webp` et
-    `overwrite=false`. `POST /uploads { publicId }` vérifie que l'id appartient à l'utilisateur,
-    lit les métadonnées **depuis Cloudinary** (jamais depuis le client), refuse au-delà de 10 Mo
-    puis enregistre.
-  - CORS configurable via `CORS_ORIGIN`, Cloudinary obligatoire au démarrage.
-- `routes/index.js` → `GET /me` et `routes/users.js` sont des routes de test **à remplacer**.
+- `models/upload.js` + `routes/uploads.js` : `POST /uploads/signature` signe un `public_id`
+  `heiguessr/<userId>/<uuid>` choisi par le serveur, `allowed_formats=jpg,png,webp`,
+  `overwrite=false`. `POST /uploads { publicId }` vérifie que l'id appartient à l'utilisateur, lit
+  les métadonnées **depuis Cloudinary**, refuse au-delà de 10 Mo puis enregistre.
+- `openapi.yaml` servi sur `/api-docs` (`GET /` y redirige). CORS via `CORS_ORIGIN`, en-têtes
+  `Location` et `Pagination-*` exposés au navigateur.
+- `bin/start.js` connecte MongoDB puis démarre le serveur ; `app.js` ne se connecte pas.
+- Tests : `test/helpers.js` (`useTestDatabase`, `createUser`, `tokenFor`, `authHeader`),
+  un fichier `*.test.js` par router / middleware.
+- `models/spot.js` : brouillon sans routes, à refaire dans l'issue Spots.
 
 ## Modèle de domaine (cible)
 
@@ -169,11 +173,12 @@ Score proposé (à valider par l'équipe) : mauvais étage = 0, sinon
 
 ## Tests (node:test)
 
-- Script : `node --test --experimental-test-coverage --test-coverage-lines=75 --test-coverage-include="**/*.js" --test-coverage-exclude="test/**" test/`.
-  Le seuil fait échouer `npm test` en dessous de 75 %.
-- `test/setup.js` : fixe les variables d'environnement de test, démarre `mongodb-memory-server`,
-  `mongoose.connect` avant tout, vide les collections dans `beforeEach`, puis déconnexion et arrêt.
-  Aucune dépendance au `.env` local, au réseau ou à Cloudinary.
+- `npm test` : `node --import ./test/setup-env.js --test --experimental-test-coverage
+  --test-coverage-lines=75` sur `test/**/*.test.js`. Sous 75 % de lignes couvertes, `npm test` échoue.
+- `test/setup-env.js` fixe les variables d'environnement de test. Chaque fichier de test appelle
+  `useTestDatabase()` (`test/helpers.js`) : MongoDB en mémoire démarrée pour le fichier, collections
+  vidées avant chaque test, arrêt à la fin. Aucune dépendance au `.env` local, au réseau ou à Cloudinary.
+- Un middleware partagé se teste via une petite app Express de test (voir `test/middlewares.test.js`).
 - Cloudinary : `mock.method(cloudinary.api, 'resource', ...)` et
   `mock.method(cloudinary.uploader, 'destroy', ...)`. Temps réel : mock de `publishGameEvent`.
 - **Un test = une seule requête REST** testée. Les données nécessaires sont créées directement
