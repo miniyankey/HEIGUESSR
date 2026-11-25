@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
-
-const emit = defineEmits(['navigate'])
+import { goTo } from '@/utils/navigation.js'
+import { register } from '@/store/useSession.js'
 
 const form = ref({
   username: '',
@@ -10,9 +10,23 @@ const form = ref({
   lastname: '',
   password: '',
 })
+const error = ref('')
+const errors = ref({})
+const busy = ref(false)
 
-function onSubmit() {
-  // TODO (issue #7) : appeler POST /auth/register et stocker le token
+async function onSubmit() {
+  busy.value = true
+  error.value = ''
+  errors.value = {}
+  try {
+    await register(form.value)
+    goTo('#home')
+  } catch (err) {
+    error.value = err.message
+    errors.value = err.errors ?? {}
+  } finally {
+    busy.value = false
+  }
 }
 </script>
 
@@ -23,10 +37,12 @@ function onSubmit() {
       Nom d'utilisateur
       <input v-model="form.username" type="text" required minlength="3" maxlength="30" />
     </label>
+    <p v-if="errors.username" class="error">{{ errors.username }}</p>
     <label>
       E-mail
       <input v-model="form.email" type="email" required />
     </label>
+    <p v-if="errors.email" class="error">{{ errors.email }}</p>
     <label>
       Prénom
       <input v-model="form.firstname" type="text" maxlength="50" />
@@ -45,32 +61,12 @@ function onSubmit() {
         autocomplete="new-password"
       />
     </label>
-    <button type="submit">Créer mon compte</button>
+    <p v-if="errors.password" class="error">{{ errors.password }}</p>
+    <p v-if="error" class="error">{{ error }}</p>
+    <button type="submit" :disabled="busy">Créer mon compte</button>
   </form>
   <p>
     Déjà inscrit·e ?
-    <button type="button" class="link" @click="emit('navigate', 'login')">Se connecter</button>
+    <a href="#login">Se connecter</a>
   </p>
 </template>
-
-<style scoped>
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  max-width: 320px;
-}
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-</style>
