@@ -36,6 +36,10 @@ tags:
       2. The client sends a `multipart/form-data` POST to `uploadUrl` with `file`, `api_key`,
          `signature` and every entry of `params` **unchanged**.
       3. `POST /uploads` with the `public_id` returned by Cloudinary registers the image.
+  - name: Floors
+    description: |
+      Floor plans of the HEIG-VD buildings. Every logged-in user can read them (players
+      click on the plan to guess); only admins create, change and delete them.
 
 components:
   securitySchemes:
@@ -141,7 +145,98 @@ components:
           type: string
           format: date-time
 
+    FloorFields:
+      type: object
+      properties:
+        building:
+          type: string
+          enum: [Cheseaux, St-Roch]
+          description: Leading/trailing spaces are removed.
+        level:
+          type: integer
+          description: |
+            Physical height, used to order the floors (0 = ground floor, negative = basement).
+            Unique per building.
+          example: 1
+        letters:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[A-Za-z]$"
+          description: |
+            Letters of the level (A = lowest, gaps allowed). Several letters when the level is
+            split into zones that are not connected. Stored uppercase and sorted. A letter
+            belongs to only one floor of a building. On update, replaces the whole list.
+          example: [C, D]
+        name:
+          type: string
+          maxLength: 100
+          example: Salles de cours
+        plan:
+          type: string
+          description: ID of an existing upload (see `POST /uploads`), the image of the plan.
+          example: 6650f1c2a1b2c3d4e5f60718
+
+    Floor:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6650f1c2a1b2c3d4e5f60a01
+        building:
+          type: string
+          enum: [Cheseaux, St-Roch]
+        level:
+          type: integer
+          example: 1
+        letters:
+          type: array
+          items:
+            type: string
+          example: [C, D]
+        name:
+          type: string
+          example: Salles de cours
+        plan:
+          type: object
+          description: The plan image. Positions on it are percentages (0-100) of its width and height.
+          properties:
+            _id:
+              type: string
+            url:
+              type: string
+              format: uri
+            width:
+              type: integer
+            height:
+              type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+  parameters:
+    FloorId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: ID of the floor. An invalid ID gives 404.
+
   responses:
+    NotFound:
+      description: No resource with this ID.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: Floor not found
     Unauthorized:
       description: Missing, invalid or expired bearer token, or the account no longer exists.
       headers:
@@ -383,3 +478,176 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /floors:
+    get:
+      tags: [Floors]
+      summary: List the floors
+      description: Sorted by building, then level. Not paginated (a few dozen floors at most).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: building
+          in: query
+          required: false
+          description: Only the floors of this building. Given more than once, gives 400.
+          schema:
+            type: string
+            example: Cheseaux
+        - name: letter
+          in: query
+          required: false
+          description: Only the floor that has this letter (case ignored). Given more than once, gives 400.
+          schema:
+            type: string
+            example: C
+      responses:
+        "200":
+          description: The floors, possibly an empty array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Floor"
+        "400":
+          description: "`building` or `letter` is given more than once."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Floors]
+      summary: Create a floor
+      description: Admins only. Fields other than those below are ignored.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/FloorFields"
+                - required: [building, level, letters, plan]
+      responses:
+        "201":
+          description: Floor created.
+          headers:
+            Location:
+              description: URL of the new floor, e.g. `/floors/6650f1c2a1b2c3d4e5f60a01`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Floor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: The building already has a floor at this level, or with one of these letters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                level:
+                  value:
+                    message: building and level already in use
+                letter:
+                  value:
+                    message: building and letters already in use
+        "422":
+          description: A field is missing or invalid, or `plan` is not an existing upload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+              example:
+                message: Validation failed
+                errors:
+                  plan: Plan must reference an existing upload
+
+  /floors/{id}:
+    parameters:
+      - $ref: "#/components/parameters/FloorId"
+    get:
+      tags: [Floors]
+      summary: Get a floor
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The floor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Floor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Floors]
+      summary: Update a floor
+      description: Admins only. Only the given fields change; other fields are ignored.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FloorFields"
+      responses:
+        "200":
+          description: The updated floor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Floor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The building already has a floor at this level, or with one of these letters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: A field is invalid, or `plan` is not an existing upload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+    delete:
+      tags: [Floors]
+      summary: Delete a floor
+      description: Admins only. Refused while spots are placed on the floor.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Floor deleted. No body.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Spots are still placed on this floor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "This floor still has spots: delete them first"

@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 import { jwtSecret } from "../config.js";
+import Upload from "../models/upload.js";
 import User from "../models/user.js";
 
 /**
@@ -60,4 +61,22 @@ export function tokenFor(user, options = { expiresIn: "1h" }) {
 /** Authorization header for supertest's .set(). */
 export function authHeader(user) {
   return { Authorization: `Bearer ${tokenFor(user)}` };
+}
+
+let uploadCounter = 0;
+
+/** Registers an image directly in the database, as if uploaded to Cloudinary. */
+export function createUpload(owner, properties = {}) {
+  uploadCounter += 1;
+  const publicId = `heiguessr/${owner.id}/upload-${uploadCounter}`;
+  return Upload.create({
+    publicId,
+    url: `https://res.cloudinary.com/test-cloud/image/upload/v1/${publicId}.png`,
+    format: "png",
+    bytes: 2048,
+    width: 1200,
+    height: 800,
+    owner: owner.id,
+    ...properties,
+  });
 }

@@ -9,6 +9,7 @@ import { corsOrigins } from "./config.js";
 import { errorHandler, notFound } from "./middlewares/errors.js";
 import { paginationHeaders } from "./middlewares/pagination.js";
 import authRouter from "./routes/auth.js";
+import floorsRouter from "./routes/floors.js";
 import uploadsRouter from "./routes/uploads.js";
 import usersRouter from "./routes/users.js";
 
@@ -35,6 +36,7 @@ app.use(express.json());
 app.get("/", (req, res) => res.redirect("/api-docs"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 app.use("/auth", authRouter);
+app.use("/floors", floorsRouter);
 app.use("/uploads", uploadsRouter);
 app.use("/users", usersRouter);
 
