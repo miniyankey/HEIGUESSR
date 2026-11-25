@@ -10,6 +10,7 @@ import { errorHandler, notFound } from "./middlewares/errors.js";
 import { paginationHeaders } from "./middlewares/pagination.js";
 import authRouter from "./routes/auth.js";
 import floorsRouter from "./routes/floors.js";
+import spotsRouter from "./routes/spots.js";
 import uploadsRouter from "./routes/uploads.js";
 import usersRouter from "./routes/users.js";
 
@@ -37,6 +38,7 @@ app.get("/", (req, res) => res.redirect("/api-docs"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 app.use("/auth", authRouter);
 app.use("/floors", floorsRouter);
+app.use("/spots", spotsRouter);
 app.use("/uploads", uploadsRouter);
 app.use("/users", usersRouter);
 
